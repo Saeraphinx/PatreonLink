@@ -2,6 +2,9 @@ import { oauth2, express } from '../../../storage/config.json';
 
 export class OAuth2Helper {
     public static async getToken(url:string, code: string, oAuth2Data:{clientId:string, clientSecret:string}, callbackUrl:string): Promise<OAuth2Response | null> {
+        if (!code || !oAuth2Data.clientId || !oAuth2Data.clientSecret || !callbackUrl || !url) {
+            return null;
+        }
         let tokenRequest = await fetch(url,
             {
                 method: `POST`,
@@ -121,6 +124,7 @@ export class PatreonAuthHelper extends OAuth2Helper {
 declare module 'express-session' {
     export interface Session {
         state: string;
+        loginType: string;
         user: {
             id: string
         };

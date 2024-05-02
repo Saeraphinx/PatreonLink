@@ -19,6 +19,8 @@ export class DatabaseManager {
         this.loadTables();
         this.sequelize.sync().then(() => {
             console.log(`Database Loaded.`);
+            console.log(`Initializing Database \"Helper\"...`);
+            new DatabaseHelper(this);
         }).catch((error) => {
             console.error(`Error loading database: ${error}`);
             exit(-1);
@@ -27,19 +29,28 @@ export class DatabaseManager {
 
     private loadTables() {
         this.users = this.sequelize.define(`users`, {
+            rId: {
+                type: DataTypes.INTEGER,
+                primaryKey: true,
+                autoIncrement: true,
+            },
             gameId: {
                 type: DataTypes.STRING,
-                primaryKey: true,
                 allowNull: false,
                 unique: true,
             },
-            signInPlatform: {
+            primarySignInPlatform: {
                 type: DataTypes.INTEGER,
-                allowNull: true,
+                allowNull: false,
             },
             idType: {
                 type: DataTypes.INTEGER,
-                allowNull: false,
+                allowNull: false
+            },
+            discordId: {
+                type: DataTypes.STRING,
+                allowNull: true,
+                unique: true,
             },
             patreonId: { //if null, then not a patreon user, manual add, level is static
                 type: DataTypes.STRING,
@@ -55,22 +66,24 @@ export class DatabaseManager {
 }
 
 export interface UserAttributes extends Model<InferAttributes<UserAttributes>, InferCreationAttributes<UserAttributes>> {
+    rId: number;
     gameId: string;
-    patreonId: string;
-    signInPlatform: SignInPlatform;
+    primarySignInPlatform: PrimarySignInPlatform;
     idType: IDType;
-    patreonLevel: PatreonLevel;
+    discordId?: string;
+    patreonId?: string;
+    patreonLevel?: PatreonLevel;
 }
 
-export enum SignInPlatform {
+export enum PrimarySignInPlatform {
     BeatLeader = 1,
     ScoreSaber = 2,
 }
 
 export enum IDType {
     Steam = 0,
-    OculusBeatLeader = 1,
-    OculusScoreSaber = 2,
+    BeatLeaderID = 1,
+    ScoreSaberID = 2,
     Other = 3,
 }
 
@@ -78,4 +91,55 @@ export enum PatreonLevel {
     EarlyAccess = 1,   // $3.50
     LargeDonation = 2, // $7
     BigDonation = 3,   // $13.50
+}
+
+export class DatabaseHelper {
+    public static database: DatabaseManager;
+
+    constructor(database: DatabaseManager) {
+        DatabaseHelper.database = database;
+        console.log(`Database \"Helper\" Initialized.`);
+    }
+
+    public static async getUser(id: string, idType: IDLookupType = IDLookupType.Game): Promise<UserAttributes | null> {
+        switch (idType) {
+            case IDLookupType.Game:
+                return await DatabaseHelper.database.users.findOne({ where: { gameId: id } });
+            case IDLookupType.Discord:
+                return await DatabaseHelper.database.users.findOne({ where: { discordId: id } });
+            case IDLookupType.Patreon:
+                return await DatabaseHelper.database.users.findOne({ where: { patreonId: id } });
+            default:
+                return null;
+        }
+    }
+
+    public static async createUser(content: {
+        gameId: string,
+        primarySignInPlatform: PrimarySignInPlatform,
+        idType: IDType,
+        patreonId?: string,
+        patreonLevel?: PatreonLevel,
+    }): Promise<UserAttributes> {
+        return await DatabaseHelper.database.users.create(content);
+    }
+
+    public static async updateUser(user: UserAttributes, content: {
+        gameId?: string,
+        primarySignInPlatform?: PrimarySignInPlatform,
+        idType?: IDType,
+        discordId?: string,
+        patreonId?: string,
+        patreonLevel?: PatreonLevel,
+    }): Promise<UserAttributes | null> {
+        if (!user) return null;
+        await user.update(content);
+        return user;
+    }
+}
+
+export enum IDLookupType { 
+    Game = 1,
+    Discord = 2,
+    Patreon = 3,
 }
