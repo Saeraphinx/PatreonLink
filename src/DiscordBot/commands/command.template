@@ -1,0 +1,14 @@
+import { SlashCommandBuilder, EmbedBuilder, ChatInputCommandInteraction } from "discord.js";
+import { Command } from "../../classes/Command";
+import { Bot } from "../../classes/Bot";
+
+module.exports = {
+    command: new Command({
+        data: new SlashCommandBuilder()
+            .setName('status')
+            .setDescription("status"),
+        execute: async function exec(bot: Bot, interaction: ChatInputCommandInteraction) {
+            await interaction.reply({ content: "fuck" });
+        }
+    })
+}

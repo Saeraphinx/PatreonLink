@@ -1,8 +1,7 @@
 import { Express } from 'express';
-import { BeatLeaderAuthHelper, OAuth2Helper } from '../classes/AuthHelper';
-import { oauth2, express } from '../../../storage/config.json';
+import { BeatLeaderAuthHelper } from '../classes/AuthHelper';
 import { HTTPTools } from '../classes/HTTPTools';
-import { DatabaseHelper, IDLookupType, IDType, PrimarySignInPlatform } from '../../Shared/Database';
+import { DatabaseHelper, IDLookupType, IDType } from '../../Shared/Database';
 
 export class BeatLeaderAuthRoutes {
     private app: Express;
@@ -21,7 +20,7 @@ export class BeatLeaderAuthRoutes {
             req.session.loginType = logintype;
             let state = HTTPTools.createRandomString(16);
             req.session.state = state;
-            return res.redirect(302, BeatLeaderAuthHelper.getBeatLeaderUrl(state, `${express.url}/api/auth/beatleader/callback`));
+            return res.redirect(302, BeatLeaderAuthHelper.getUrl(state));
         });
 
         this.app.get(`/api/auth/beatleader/callback`, async (req, res) => {
@@ -30,7 +29,7 @@ export class BeatLeaderAuthRoutes {
             if (state !== req.session.state) {
                 return res.status(400).send({ error: `Invalid state.` });
             }
-            let token = OAuth2Helper.getToken(null, code, oauth2.beatleader, `${express.url}/api/auth/beatleader/callback`);
+            let token = BeatLeaderAuthHelper.getToken(code);
             if (!token) { return res.status(400).send({ error: `Invalid code.` }); }
             let user = await BeatLeaderAuthHelper.getUser((await token).access_token);
             if (!user) { return res.status(500).send({ error: `Internal server error.` }); }
@@ -40,28 +39,23 @@ export class BeatLeaderAuthRoutes {
             switch (req.session.loginType) {
                 case `login`:
                     if (!dbUser) {
-                        if (user.platform == `steam`) {
-                            dbUser = await DatabaseHelper.createUser({
-                                gameId: user.id,
-                                primarySignInPlatform: PrimarySignInPlatform.BeatLeader,
-                                idType: IDType.Steam,
-                            });
-                        } else {
-                            dbUser = await DatabaseHelper.createUser({
-                                gameId: user.id,
-                                primarySignInPlatform: PrimarySignInPlatform.BeatLeader,
-                                idType: IDType.BeatLeaderID,
-                            });
-                        }
-                        if (!dbUser) {
-                            return res.status(500).send({ error: `Internal server error.` });
-                        }
+                        res.status(401).send({ error: `BeatLeader registration not permitted.` });
+                        return;
                     }
                     break;
                 case `link`:
-                    
+                    if (req.session.user.rId) {
+                        if (dbUser) {
+                            res.status(400).send({ error: `BeatLeader account already linked.` });
+                            return;
+                        }
+                        dbUser.gameId = user.id;
+                        dbUser.idType = user.platform === `steam` ? IDType.Steam : IDType.BeatLeaderID;
+                        dbUser.save();
+                    }
             }
-            req.session.user.id = dbUser.gameId;
+            req.session.user.rId = dbUser.rId;
+            req.session.loginType = null;
             return res.status(200).send({ message: `Successfully logged in.` });
         });
     }

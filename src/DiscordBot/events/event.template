@@ -1,0 +1,13 @@
+import { BaseInteraction, Events, Interaction } from "discord.js";
+import { Event } from "../../classes/Event";
+import { Bot } from "../../classes/Bot";
+
+module.exports = {
+    event: new Event({
+        event: Events.InteractionCreate,
+        once: false,
+        execute: async function exec(bot: Bot, interaction:BaseInteraction) {
+            
+        }
+    })
+}
