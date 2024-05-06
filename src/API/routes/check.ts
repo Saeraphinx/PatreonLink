@@ -15,7 +15,16 @@ export class PatreonAuthRoutes {
 
             let user = await DatabaseHelper.getUser(userId, IDLookupType.Game);
             if (!user) return res.status(200).send({ patreonLevel: 0 });
-            if (user.overridePatreonLevel) return res.status(200).send({ patreonLevel: user.overridePatreonLevel });
+            if (user.overridePatreonLevel) {
+                if (!user.patreonLevel) {
+                    return res.status(200).send({ patreonLevel: user.overridePatreonLevel });
+                }
+                if (user.overridePatreonLevel > user.patreonLevel) {
+                    return res.status(200).send({ patreonLevel: user.overridePatreonLevel });
+                } else {
+                    return res.status(200).send({ patreonLevel: user.patreonLevel });
+                }
+            }
             if (!user.patreonLevel) return res.status(200).send({ patreonLevel: 0 });
             return res.status(200).send({ patreonLevel: user.patreonLevel });
         });

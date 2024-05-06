@@ -3,6 +3,7 @@ import { exit } from "process";
 import { DataTypes, InferAttributes, InferCreationAttributes, Model, ModelStatic, Sequelize } from "sequelize";
 //@ts-ignore
 import { storage } from '../../storage/config.json';
+import { Logger } from "./Logger";
 
 export class DatabaseManager {
     public sequelize: Sequelize;
@@ -26,6 +27,23 @@ export class DatabaseManager {
             console.error(`Error loading database: ${error}`);
             exit(-1);
         });
+    }
+
+    private async maintainDatabase() {
+        let userdb = await this.users.findAll();
+        for (let user of userdb) {
+            if (!user.patreonId && !user.gameId && !user.discordId) {
+                Logger.warn(`User ${user.rId} has no linked accounts, deleting.`);
+                user.destroy();
+                continue;
+            }
+
+            if (user.idType == null && user.gameId) {
+                user.idType = IDType.Other;
+                user.save();
+                Logger.warn(`User ${user.rId} has no IDType, setting to Other.`);
+            }
+        }
     }
 
     private loadTables() {
@@ -66,6 +84,21 @@ export class DatabaseManager {
                 type: DataTypes.BOOLEAN,
                 allowNull: false,
                 defaultValue: false,
+                get() {
+                    let admin = this.getDataValue(`isAdmin`);
+                    if (admin == true) {
+                        Logger.warn(`Getting isAdmin for ${this.getDataValue(`rId`)}`);
+                    }
+                    return admin;
+                },
+                set(value: boolean) {
+                    if (value == false) {
+                        this.setDataValue(`isAdmin`, value);
+                    } else {
+                        Logger.warn(`Setting isAdmin for ${this.getDataValue(`rId`)} to ${value}`);
+                        this.setDataValue(`isAdmin`, value);
+                    }
+                },
             },
 
         });
@@ -91,9 +124,10 @@ export enum IDType {
 }
 
 export enum PatreonLevel {
-    EarlyAccess = 1,   // $3.50
-    LargeDonation = 2, // $7
-    BigDonation = 3,   // $13.50
+    EarlyAccess = 10,   // $3.50
+    LargeDonation = 20, // $7
+    BigDonation = 30,   // $13.50
+    SuperSecretPrivatePatreonLevelThatNoOneKnowsAboutBecauseItsNotRealAndOnlyExistsOnTheServerBTWPinkCute = 999,
 }
 
 export class DatabaseHelper {
@@ -104,7 +138,7 @@ export class DatabaseHelper {
         console.log(`Database \"Helper\" Initialized.`);
     }
 
-    public static async getUser(id: string, idType: IDLookupType = IDLookupType.Game): Promise<UserAttributes | null> {
+    public static async getUser(id: string|number, idType: IDLookupType = IDLookupType.Game): Promise<UserAttributes | null> {
         switch (idType) {
             case IDLookupType.Game:
                 return await DatabaseHelper.database.users.findOne({ where: { gameId: id } });
@@ -129,6 +163,16 @@ export class DatabaseHelper {
         isAdmin? : boolean,
     }): Promise<UserAttributes> {
         if (!content.isAdmin) content.isAdmin = false;
+        if (content.gameId) {
+            Logger.log(`Creating user with game ID ${content.gameId}`);
+        } else if (content.discordId) {
+            Logger.log(`Creating user with discord ID ${content.discordId}`);
+        } else if (content.patreonId) {
+            Logger.log(`Creating user with patreon ID ${content.patreonId}`);
+        } else {
+            Logger.log(`Creating user with no ID`);
+        }
+
         return await DatabaseHelper.database.users.create(content);
     }
 
@@ -146,12 +190,34 @@ export class DatabaseHelper {
         return user;
     }
 
+    /*public static async deleteUser(user: UserAttributes): Promise<boolean> {
+        if (!user) return false;
+        await user.destroy();
+        return true;
+    }
+
     public static async deleteUser(id: string, idType: IDLookupType = IDLookupType.Game): Promise<boolean> {
         let user = await DatabaseHelper.getUser(id, idType);
         if (!user) return false;
         await user.destroy();
         return true;
+    }*/
+    public static async deleteUser(id: string|number, idType: IDLookupType): Promise<boolean>;
+    public static async deleteUser(user: UserAttributes): Promise<boolean>;
+    public static async deleteUser(id: string|number|UserAttributes, idType?:IDLookupType): Promise<boolean> {
+        Logger.log(`Attempting to delete user ${id} with type ${idType}`);
+        let user: UserAttributes;
+        if (!idType) idType = IDLookupType.Game; // compatibility's sake
+        if (typeof id == `string` || typeof id == `number`) {
+            user = await DatabaseHelper.getUser(id, idType);
+        } else {
+            user = id;
+        }
+        if (!user) return false;
+        await user.destroy();
+        return true;
     }
+
 }
 
 export enum IDLookupType { 

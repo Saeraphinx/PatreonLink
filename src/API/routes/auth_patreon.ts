@@ -2,6 +2,8 @@ import { Express } from 'express';
 import { PatreonAuthHelper } from '../classes/AuthHelper';
 import { HTTPTools } from '../classes/HTTPTools';
 import { DatabaseHelper, IDLookupType, IDType } from '../../Shared/Database';
+//@ts-ignore
+import { express } from '../../../storage/config.json';
 
 export class PatreonAuthRoutes {
     private app: Express;
@@ -14,8 +16,12 @@ export class PatreonAuthRoutes {
     private async loadRoutes() {
         this.app.get(`/api/auth/patreon`, async (req, res) => {
             const logintype = req.query[`type`].toString();
+            const simpleRegister = req.query[`simple`].toString();
             if (logintype !== `login` && logintype !== `link`) {
                 return res.status(400).send({ error: `Invalid login type.` });
+            }
+            if (simpleRegister === `true`) {
+                req.session.simpleRegister = true;
             }
             req.session.loginType = logintype;
             let state = HTTPTools.createRandomString(16);
@@ -48,7 +54,14 @@ export class PatreonAuthRoutes {
                             res.status(500).send({ error: `Internal server error.` });
                             return;
                         }
-                        return;
+                        if (req.session.simpleRegister) {
+                            req.session.user.rId = dbUser.rId;
+                            req.session.loginType = null;
+                            res.redirect(`${express.url}/api/auth/beatleader?type=link`);
+                            req.session.simpleRegister = false;
+                            return;
+                        }
+
                     }
                     break;
                 case `link`:
@@ -57,6 +70,26 @@ export class PatreonAuthRoutes {
             req.session.user.rId = dbUser.rId;
             req.session.loginType = null;
             return res.status(200).send({ message: `Successfully logged in.` });
+        });
+
+        this.app.delete(`/api/auth/patreon`, async (req, res) => {
+            if (!req.session.user.rId) {
+                return res.status(401).send({ error: `Not logged in.` });
+            }
+            let dbUser = await DatabaseHelper.getUser(req.session.user.rId, IDLookupType.Database);
+            if (!dbUser) {
+                return res.status(500).send({ error: `Internal server error.` });
+            }
+            dbUser.patreonId = null;
+            dbUser.patreonLevel = null;
+            dbUser.save();
+            let accountDeleted = false;
+            if (!dbUser.patreonId && !dbUser.gameId && !dbUser.discordId) {
+                req.session.user.rId = null;
+                dbUser.destroy();
+                accountDeleted = true;
+            }
+            return res.status(200).send({ message: `Successfully unlinked Patreon account.`, accountDeleted: accountDeleted });
         });
     }
 }

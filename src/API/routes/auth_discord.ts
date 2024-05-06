@@ -57,5 +57,24 @@ export class DiscordAuthRoutes {
             req.session.loginType = null;
             return res.status(200).send({ message: `Successfully logged in.` });
         });
+
+        this.app.delete(`/api/auth/discord`, async (req, res) => {
+            if (!req.session.user.rId) {
+                return res.status(401).send({ error: `Not logged in.` });
+            }
+            let dbUser = await DatabaseHelper.getUser(req.session.user.rId, IDLookupType.Database);
+            if (!dbUser) {
+                return res.status(500).send({ error: `Internal server error.` });
+            }
+            dbUser.discordId = null;
+            dbUser.save();
+            let accountDeleted = false;
+            if (!dbUser.patreonId && !dbUser.gameId && !dbUser.discordId) {
+                req.session.user.rId = null;
+                dbUser.destroy();
+                accountDeleted = true;
+            }
+            return res.status(200).send({ message: `Successfully unlinked Discord account.`, accountDeleted: accountDeleted });
+        });
     }
 }

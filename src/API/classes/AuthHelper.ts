@@ -188,6 +188,7 @@ declare module 'express-session' {
     export interface Session {
         state: string;
         loginType: "login" | "link" | null;
+        simpleRegister: boolean;
         user: {
             rId: number,
         };

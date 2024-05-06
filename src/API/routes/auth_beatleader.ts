@@ -58,5 +58,25 @@ export class BeatLeaderAuthRoutes {
             req.session.loginType = null;
             return res.status(200).send({ message: `Successfully logged in.` });
         });
+
+        this.app.delete(`/api/auth/beatleader`, async (req, res) => {
+            if (!req.session.user.rId) {
+                return res.status(401).send({ error: `Not logged in.` });
+            }
+            let dbUser = await DatabaseHelper.getUser(req.session.user.rId, IDLookupType.Database);
+            if (!dbUser) {
+                return res.status(500).send({ error: `Internal server error.` });
+            }
+            dbUser.gameId = null;
+            dbUser.idType = null;
+            dbUser.save();
+            let accountDeleted = false;
+            if (!dbUser.patreonId && !dbUser.gameId && !dbUser.discordId) {
+                req.session.user.rId = null;
+                DatabaseHelper.deleteUser(dbUser);
+                accountDeleted = true;
+            }
+            return res.status(200).send({ message: `Successfully unlinked BeatLeader account.`, accountDeleted: accountDeleted });
+        });
     }
 }

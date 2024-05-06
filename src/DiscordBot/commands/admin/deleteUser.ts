@@ -6,7 +6,7 @@ import { DatabaseHelper, IDLookupType } from "../../../Shared/Database";
 module.exports = {
     command: new Command({
         data: new SlashCommandBuilder()
-            .setName('deletelink')
+            .setName('deleteuser')
             .setDescription("Delete a user from the database.")
             .addSubcommand(subcommand => subcommand
                 .setName('bydiscord')
